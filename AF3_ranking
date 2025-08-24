@@ -1,0 +1,64 @@
+import os
+import json
+import time
+
+# CHANGE PATH
+base_dir = "/lustre07/scratch/User/alphafold/inference_outputs"
+
+# Dynamically generate output filename from second-to-last directory
+label = os.path.basename(os.path.dirname(base_dir.rstrip("/")))
+output_file = f"pae_summary_{label}.txt"
+
+MAX_TASKS = None  # Optional limit
+
+results = []
+task_count = 0
+start_time = time.time()
+
+# Loop through task directories
+for task_dir in os.listdir(base_dir):
+    task_path = os.path.join(base_dir, task_dir)
+    if not os.path.isdir(task_path):
+        continue
+
+    # Loop through subdirectories inside each task
+    for subdir in os.listdir(task_path):
+        sub_path = os.path.join(task_path, subdir)
+        if not os.path.isdir(sub_path):
+            continue
+
+        # Look for *summary_confidences.json inside the subdirectory
+        for file in os.listdir(sub_path):
+            if file.endswith("summary_confidences.json"):
+                if MAX_TASKS and task_count >= MAX_TASKS:
+                    break
+
+                full_path = os.path.join(sub_path, file)
+
+                try:
+                    with open(full_path, 'r') as f:
+                        data = json.load(f)
+                        iptm = data.get("iptm")
+                        ptm = data.get("ptm")
+
+                        if iptm is not None and ptm is not None:
+                            score = 0.8 * iptm + 0.2 * ptm
+                            task_id = os.path.basename(task_path)  # e.g. task_403
+                            results.append((score, task_id))
+                        else:
+                            print(f"Warning: iptm or ptm missing in {full_path}")
+                except Exception as e:
+                    print(f"Error reading {full_path}: {e}")
+
+                task_count += 1
+
+# Sort by ascending score
+results.sort(key=lambda x: x[0])
+
+# Write to output file
+with open(output_file, 'w') as f:
+    for score, task_id in results:
+        f.write(f"{task_id}\t{score:.2f}\n")
+
+print(f"\nDone. {len(results)} entries written to {output_file}")
+print(f"Total time: {time.time() - start_time:.2f} seconds")
