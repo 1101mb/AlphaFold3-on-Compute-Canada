@@ -6,22 +6,39 @@ Getting Model parameters
 Model parameters are only accessible through google. You can go to this link and ask for their permission https://github.com/google-deepmind/alphafold3. Note if you want to download them, be sure to have enough storage on your computer. 
 Getting AlphaFold3 onto Compute Canada
 AF3 only works with certain GPUs so you have to use servers like Narval (the one I am using) and I think Graham. There is an decently comprehensive wiki for the installation, or you can just paste into the terminal the same thing I pasted below:
+
 https://docs.alliancecan.ca/wiki/AlphaFold3
+
 In the home directory:
+
 module load StdEnv/2023 hmmer/3.4 rdkit/2024.03.5 python/3.12
+
 wget https://raw.githubusercontent.com/google-deepmind/alphafold3/refs/tags/v3.0.1/run_alphafold.py
+
 virtualenv --no-download ~/alphafold3_env
+
 source ~/alphafold3_env/bin/activate
+
 pip install --no-index --upgrade pip
+
 pip install --no-index alphafold3==3.0.1
+
 build_data
+
 python run_alphafold.py --help
+
 pip freeze > ~/alphafold3-requirements.txt
+
 deactivate
+
 rm -r ~/alphafold3_env
+
 wget https://raw.githubusercontent.com/google-deepmind/alphafold3/refs/heads/main/fetch_databases.sh
+
 mkdir -p $SCRATCH/alphafold/dbs
+
 bash fetch_databases.sh $SCRATCH/alphafold/dbs
+
 
 Then within the alphafold/ make a directory called “model_weights” and add in the file supplied by google. AF3 should be up and running now. 
 
