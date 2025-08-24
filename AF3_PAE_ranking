@@ -1,0 +1,66 @@
+# -*- coding: utf-8 -*-
+import os
+import json
+
+def extract_min_pae(json_path, chain1_id="A", chain2_id="B"):
+    with open(json_path) as f:
+        data = json.load(f)
+
+    if "token_chain_ids" not in data or "pae" not in data:
+        print(f"Skipping (missing token_chain_ids or pae): {json_path}")
+        return None, None, None
+
+    token_chain_ids = data["token_chain_ids"]
+    pae = data["pae"]
+
+    n_chain1 = token_chain_ids.count(chain1_id)
+    n_chain2 = token_chain_ids.count(chain2_id)
+
+    a_vs_b = [row[n_chain1:n_chain1+n_chain2] for row in pae[0:n_chain1]]
+    b_vs_a = [row[0:n_chain1] for row in pae[n_chain1:n_chain1+n_chain2]]
+    interchain_pae_values = [v for row in a_vs_b + b_vs_a for v in row]
+
+    min_pae = min(interchain_pae_values)
+
+    task_id = next((part for part in json_path.split(os.sep) if part.startswith("task_")), "unknown_task")
+    print(f"Done: {task_id} -> Min PAE = {min_pae:.2f} A")
+
+    # Use parent folder name of the JSON as identifier
+    parent_name = os.path.basename(os.path.dirname(json_path))
+    return task_id, min_pae, parent_name
+
+def scan_and_write_summary(root_dir):
+    summary = []
+
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            if filename.endswith("_confidences.json") and not filename.endswith("summary_confidences.json"):
+                json_path = os.path.join(dirpath, filename)
+                task_id, min_pae, parent_dir = extract_min_pae(json_path)
+                if task_id is not None:
+                    summary.append((task_id, min_pae, parent_dir))
+
+    # If no files processed, stop here
+    if not summary:
+        print("No valid JSON files processed.")
+        return
+
+    # Use parent directory name of JSONs for the output filename
+    parent_name = summary[0][2]
+    summary_filename = f"pae_summary_{parent_name}.txt"
+    summary_path = os.path.expanduser(f"~/{summary_filename}")
+
+    # Sort by min PAE ascending
+    summary.sort(key=lambda x: x[1])
+
+    with open(summary_path, "w") as f:
+        for task_id, min_pae, _ in summary:
+            f.write(f"{task_id}\t{min_pae:.2f}\n")
+
+    print(f"\nSummary saved to: {summary_path}")
+
+# ----------- USER SETTING ------------
+input_root = "/lustre07/scratch/User/alphafold/inference_outputs"
+# -------------------------------------
+
+scan_and_write_summary(input_root)
