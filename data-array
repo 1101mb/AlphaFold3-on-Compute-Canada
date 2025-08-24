@@ -1,0 +1,64 @@
+#!/bin/bash
+
+#SBATCH --job-name=af3-array
+#SBATCH --account=def-someprof
+#SBATCH --time=08:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+### NEED to change the next one to 0 - n-1, n=number of json files ###
+#SBATCH --array=0-376
+
+# Load required modules
+module load StdEnv/2023 hmmer/3.4 rdkit/2024.03.5 python/3.12
+
+# Define paths
+### NEED to change the next one ###
+INPUT_DIR=$SCRATCH/alphafold/input
+INPUT_LIST=$INPUT_DIR/input_list.txt
+DOWNLOAD_DIR=$SCRATCH/alphafold/dbs
+OUTPUT_DIR=$SLURM_TMPDIR/alphafold/output_${SLURM_ARRAY_TASK_ID}
+
+# Create Python virtual environment
+virtualenv --no-download $SLURM_TMPDIR/env
+source $SLURM_TMPDIR/env/bin/activate
+pip install --no-index --upgrade pip
+pip install --no-index --requirement ~/alphafold3-requirements.txt
+
+# Precompute chemical data constants
+build_data
+
+# Disable Triton GEMM for compatibility
+export XLA_FLAGS="--xla_gpu_enable_triton_gemm=false"
+
+# Get the input file name from the input list based on SLURM task ID
+JSON_FILENAME=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" $INPUT_LIST)
+INPUT_JSON="$INPUT_DIR/$JSON_FILENAME"
+
+# Check that the file exists
+if [ ! -f "$INPUT_JSON" ]; then
+    echo "ERROR: Input JSON not found at $INPUT_JSON"
+    exit 1
+fi
+
+echo "Running AlphaFold on: $INPUT_JSON"
+cat "$INPUT_JSON"
+
+# Run AlphaFold3 data preprocessing (no inference)
+python /home/marvinb/run_alphafold.py \
+    --json_path="$INPUT_JSON" \
+    --db_dir=$DOWNLOAD_DIR \
+    --output_dir=$OUTPUT_DIR \
+    --jax_compilation_cache_dir=$HOME/.cache \
+    --nhmmer_n_cpu=$SLURM_CPUS_PER_TASK \
+    --jackhmmer_n_cpu=$SLURM_CPUS_PER_TASK \
+    --norun_inference
+
+# Copy results back if any
+### NEED to change the next one ###
+FINAL_OUTPUT=$SCRATCH/alphafold/output/task_${SLURM_ARRAY_TASK_ID}
+if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A $OUTPUT_DIR)" ]; then
+    mkdir -p $FINAL_OUTPUT
+    cp -vr $OUTPUT_DIR/* $FINAL_OUTPUT/
+else
+    echo "No output files found for task ${SLURM_ARRAY_TASK_ID}"
+fi
