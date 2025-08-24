@@ -44,7 +44,7 @@ echo "Running AlphaFold on: $INPUT_JSON"
 cat "$INPUT_JSON"
 
 # Run AlphaFold3 data preprocessing (no inference)
-python /home/marvinb/run_alphafold.py \
+python /home/user/run_alphafold.py \
     --json_path="$INPUT_JSON" \
     --db_dir=$DOWNLOAD_DIR \
     --output_dir=$OUTPUT_DIR \
